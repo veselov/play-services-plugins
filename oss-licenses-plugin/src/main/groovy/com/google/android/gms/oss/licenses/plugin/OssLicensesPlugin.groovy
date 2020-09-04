@@ -33,19 +33,16 @@ class OssLicensesPlugin implements Plugin<Project> {
 
         def resourceOutput = new File(dependencyOutput, "/res")
         def outputDir = new File(resourceOutput, "/raw")
-        def licensesFile = new File(outputDir, "third_party_licenses")
-        def licensesMetadataFile = new File(outputDir,
-                "third_party_license_metadata")
+        def licensesFile = new File(outputDir, "third_party_licenses.csv")
         def licenseTask = project.tasks.create("generateLicenses", LicensesTask)
 
         licenseTask.dependenciesJson = generatedJson
         licenseTask.outputDir = outputDir
         licenseTask.licenses = licensesFile
-        licenseTask.licensesMetadata = licensesMetadataFile
 
         licenseTask.inputs.file(generatedJson)
         licenseTask.outputs.dir(outputDir)
-        licenseTask.outputs.files(licensesFile, licensesMetadataFile)
+        licenseTask.outputs.files(licensesFile)
 
         licenseTask.dependsOn(getDependencies)
 
@@ -82,7 +79,6 @@ class OssLicensesPlugin implements Plugin<Project> {
         cleanupTask.dependencyFile = generatedJson
         cleanupTask.dependencyDir = dependencyOutput
         cleanupTask.licensesFile = licensesFile
-        cleanupTask.metadataFile = licensesMetadataFile
         cleanupTask.licensesDir = outputDir
 
         project.tasks.findByName("clean").dependsOn(cleanupTask)

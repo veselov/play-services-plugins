@@ -45,16 +45,15 @@ class LicensesTask extends DefaultTask {
     private static final int GRANULAR_BASE_VERSION = 14
     private static final String GOOGLE_PLAY_SERVICES_GROUP =
         "com.google.android.gms"
-    private static final String LICENSE_ARTIFACT_SURFIX = "-license"
+    private static final String LICENSE_ARTIFACT_SUFFIX = "-license"
     private static final String FIREBASE_GROUP = "com.google.firebase"
     private static final String FAIL_READING_LICENSES_ERROR =
         "Failed to read license text."
 
     private static final logger = LoggerFactory.getLogger(LicensesTask.class)
 
-    protected int start = 0
     protected Set<String> googleServiceLicenses = []
-    protected Map<String, String> licensesMap = [:]
+    protected Set<String> addedLicenses = []
 
     @InputFile
     public File dependenciesJson
@@ -65,14 +64,10 @@ class LicensesTask extends DefaultTask {
     @OutputFile
     public File licenses
 
-    @OutputFile
-    public File licensesMetadata
-
     @TaskAction
     void action() {
         initOutputDir()
         initLicenseFile()
-        initLicensesMetadata()
 
         def allDependencies = new JsonSlurper().parse(dependenciesJson)
         for (entry in allDependencies) {
@@ -82,9 +77,9 @@ class LicensesTask extends DefaultTask {
             String version = entry.version
             File artifactLocation = new File(fileLocation)
 
-            if (isGoogleServices(group, name)) {
+            if (isGoogleServices(group)) {
                 // Add license info for google-play-services itself
-                if (!name.endsWith(LICENSE_ARTIFACT_SURFIX)) {
+                if (!name.endsWith(LICENSE_ARTIFACT_SUFFIX)) {
                     addLicensesFromPom(group, name, version)
                 }
                 // Add transitive licenses info for google-play-services. For
@@ -94,7 +89,7 @@ class LicensesTask extends DefaultTask {
                 // dependency.
                 if (isGranularVersion(version)) {
                     addGooglePlayServiceLicenses(artifactLocation)
-                } else if (name.endsWith(LICENSE_ARTIFACT_SURFIX)) {
+                } else if (name.endsWith(LICENSE_ARTIFACT_SUFFIX)) {
                     addGooglePlayServiceLicenses(artifactLocation)
                 }
             } else {
@@ -102,7 +97,6 @@ class LicensesTask extends DefaultTask {
             }
         }
 
-        writeMetadata()
     }
 
     protected void initOutputDir() {
@@ -120,18 +114,12 @@ class LicensesTask extends DefaultTask {
         }
     }
 
-    protected void initLicensesMetadata() {
-        licensesMetadata.newWriter().withWriter {w ->
-            w << ''
-        }
-    }
-
-    protected boolean isGoogleServices(String group, String name) {
+    protected static boolean isGoogleServices(String group) {
         return (GOOGLE_PLAY_SERVICES_GROUP.equalsIgnoreCase(group)
                 || FIREBASE_GROUP.equalsIgnoreCase(group))
     }
 
-    protected boolean isGranularVersion (String version) {
+    protected static boolean isGranularVersion (String version) {
         String[] versions = version.split("\\.")
         return (versions.length > 0
                 && Integer.valueOf(versions[0]) >= GRANULAR_BASE_VERSION)
@@ -165,12 +153,12 @@ class LicensesTask extends DefaultTask {
                     licensesZip.getInputStream(txtFile),
                     startValue,
                     lengthValue)
-                appendLicense(key, content)
+                appendLicense(key, key, "external", content)
             }
         }
     }
 
-    protected byte[] getBytesFromInputStream(
+    protected static byte[] getBytesFromInputStream(
         InputStream stream,
         long offset,
         int length) {
@@ -202,10 +190,10 @@ class LicensesTask extends DefaultTask {
 
     protected void addLicensesFromPom(String group, String name, String version) {
         def pomFile = resolvePomFileArtifact(group, name, version)
-        addLicensesFromPom((File) pomFile, group, name)
+        addLicensesFromPom((File) pomFile, group, name, version)
     }
 
-    protected void addLicensesFromPom(File pomFile, String group, String name) {
+    protected void addLicensesFromPom(File pomFile, String group, String name, String version) {
         if (pomFile == null || !pomFile.exists()) {
             logger.error("POM file $pomFile for $group:$name does not exist.")
             return
@@ -221,11 +209,11 @@ class LicensesTask extends DefaultTask {
             rootNode.licenses.license.each { node ->
                 String nodeName = node.name
                 String nodeUrl = node.url
-                appendLicense("${licenseKey} ${nodeName}", nodeUrl.getBytes(UTF_8))
+                appendLicense("${licenseKey} ${nodeName}", "${licenseKey}", version, nodeUrl.getBytes(UTF_8))
             }
         } else {
             String nodeUrl = rootNode.licenses.license.url
-            appendLicense(licenseKey, nodeUrl.getBytes(UTF_8))
+            appendLicense(licenseKey, licenseKey, version, nodeUrl.getBytes(UTF_8))
         }
     }
 
@@ -255,30 +243,63 @@ class LicensesTask extends DefaultTask {
         return ((ResolvedArtifactResult) artifacts[0]).getFile()
     }
 
-    protected void appendLicense(String key, byte[] content) {
-        if (licensesMap.containsKey(key)) {
-            return
-        }
+    protected void appendLicense(String id, String product, String version, byte[] content) {
 
-        licensesMap.put(key, "${start}:${content.length}")
-        appendLicenseContent(content)
-        appendLicenseContent(LINE_SEPARATOR)
-    }
+        if (addedLicenses.contains(id)) { return }
+        addedLicenses.add(id)
 
-    protected void appendLicenseContent(byte[] content) {
-        licenses.append(content)
-        start += content.length
-    }
+        licenses.append(formatCsvString(product))
+        licenses.append(',')
+        licenses.append(formatCsvString(version))
+        licenses.append(',')
+        licenses.append(formatCsvString(new String(content)))
+        licenses.append(LINE_SEPARATOR)
 
-    protected void writeMetadata() {
-        for (entry in licensesMap) {
-            licensesMetadata.append("$entry.value $entry.key", UTF_8)
-            licensesMetadata.append(LINE_SEPARATOR)
-        }
     }
 
     private static ModuleComponentIdentifier createModuleComponentIdentifier(String group, String name, String version) {
         return new DefaultModuleComponentIdentifier(DefaultModuleIdentifier.newId(group, name), version)
     }
+
+    static String formatCsvString(String s) {
+        StringBuilder sb = new StringBuilder()
+        boolean useQ = false
+        int l = s.length()
+        for (int i=0; i<l; i++) {
+            char c = s.charAt(i)
+            if (useQ) {
+                if (c == (char)'"') {
+                    // this is how we quote double quotes.
+                    sb.append('"')
+                }
+                // everything else goes.
+                sb.append(c)
+            } else {
+
+                if (c == (char)'"' || c == (char)',' || Character.isWhitespace(c)) {
+                    // we need to turn on using quotes.
+                    useQ = true
+                    // starting quote
+                    sb.append('"')
+                    // all that had accumulated
+                    sb.append(s, 0, i)
+                    // escape if encountered double-quote
+                    if (c == (char)'"') { sb.append('"') }
+                    // add current character.
+                    sb.append(c)
+                }
+
+            }
+        }
+
+        if (useQ) {
+            sb.append('"')
+            return sb.toString()
+        }
+
+        return s
+
+    }
+
 
 }

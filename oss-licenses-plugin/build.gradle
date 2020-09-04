@@ -1,5 +1,17 @@
-apply plugin: 'groovy'
-apply plugin: 'java'
+
+plugins {
+    id 'java'
+    id 'groovy'
+    id 'java-library'
+    id 'maven-publish'
+    id 'maven'
+    id "com.jfrog.artifactory" version "4.17.2"
+}
+
+// apply plugin: 'groovy'
+// apply plugin: 'java'
+// apply plugin: 'maven-publish'
+// apply plugin: 'maven'
 
 dependencies {
     implementation gradleApi()
@@ -10,36 +22,45 @@ dependencies {
 }
 
 group = 'com.google.android.gms'
-version = '0.10.2'
-
-apply plugin: 'maven'
+version = '0.10.2-xl4'
 
 repositories {
     google()
     jcenter()
 }
 
-// upload and build in local
-uploadArchives {
-    repositories {
-        mavenDeployer {
-            repository(url: uri('../repo'))
-            pom.project {
-                licenses {
-                    license {
-                        name 'The Apache Software License, Version 2.0'
-                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                        distribution 'repo'
-                    }
-                }
-
-            }
+publishing{
+    publications {
+        mavenJava(MavenPublication)  {
+            groupId group
+            version version
+            artifactId project.getName()
+            artifact("$buildDir/libs/${project.getName()}-${version}.jar")
         }
     }
 }
 
-// generate zip file for android maven release tool
-task packageFiles(type: Zip, dependsOn: 'uploadArchives') {
-    def groupDir = rootProject.group.replaceAll('\\.', '/')
-    from("../repo/$groupDir/$rootProject.name/$rootProject.version/")
+artifactory {
+    contextUrl = 'https://dev-esync.excelfore.com/artifactory'   //The base Artifactory URL if not overridden by the publisher/resolver
+    publish {
+        //A closure defining publishing information
+        repository {
+            repoKey = 'excelfore.public'   //The Artifactory repository key to publish to
+            username = "${excelfore_artifactory_user}"          //The publisher user name
+            password = "${excelfore_artifactory_password}"          //The publisher user name
+        }
+        defaults {
+            //List of Gradle Publications (names or objects) from which to collect the list of artifacts to be deployed to Artifactory.
+            publications ('mavenJava')
+            ////List of Gradle Configurations (names or objects) from which to collect the list of artifacts to be deployed to Artifactory.
+            //publishConfigs('archives', 'published')
+            publishBuildInfo = false   //Publish build-info to Artifactory (true by default)
+            publishArtifacts = true   //Publish artifacts to Artifactory (true by default)
+            publishPom = true   //Publish generated POM files to Artifactory (true by default).
+            publishIvy = true   //Publish generated Ivy descriptor files to Artifactory (true by default).
+        }
+    }
+    // Redefine basic properties of the build info object
+    //clientConfig.info.setBuildName('new-strange-name')
+    clientConfig.timeout = 600 // Artifactory connection timeout (in seconds). The default timeout is 300 seconds.
 }

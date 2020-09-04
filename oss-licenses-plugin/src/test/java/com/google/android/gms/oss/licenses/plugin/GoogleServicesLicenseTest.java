@@ -29,7 +29,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-/** Test for {@link LicensesTask#isGoogleServices(String, String)} */
+/** Test for {@link LicensesTask#isGoogleServices(String)} */
 @RunWith(Parameterized.class)
 public class GoogleServicesLicenseTest {
   private static final String BASE_DIR = "src/test/resources";
@@ -63,6 +63,6 @@ public class GoogleServicesLicenseTest {
 
   @Test
   public void test() {
-    assertEquals(expectedResult, licensesTask.isGoogleServices(inputGroup, inputArtifactName));
+    assertEquals(expectedResult, licensesTask.isGoogleServices(inputGroup));
   }
 }
