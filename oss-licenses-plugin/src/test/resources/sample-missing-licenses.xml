@@ -1,0 +1,17 @@
+<libraries>
+    <library>
+        <groupId>guava</groupId>
+        <artifactId>guava</artifactId>
+        <url>https://github.com/google/guava</url>
+        <licenses>
+            <license>
+                <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            </license>
+        </licenses>
+    </library>
+    <library>
+        <groupId>guava2</groupId>
+        <artifactId>guava2</artifactId>
+        <skip/>
+    </library>
+</libraries>

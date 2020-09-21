@@ -17,10 +17,12 @@
 package com.google.android.gms.oss.licenses.plugin
 
 import groovy.json.JsonSlurper
+import groovy.util.slurpersupport.GPathResult
 import org.gradle.api.DefaultTask
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.result.ResolvedArtifactResult
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
@@ -29,9 +31,6 @@ import org.gradle.internal.component.external.model.DefaultModuleComponentIdenti
 import org.gradle.maven.MavenModule
 import org.gradle.maven.MavenPomArtifact
 import org.slf4j.LoggerFactory
-
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
 
 /**
  * Task to find available licenses from the artifacts stored in the json
@@ -42,10 +41,11 @@ class LicensesTask extends DefaultTask {
     private static final String UTF_8 = "UTF-8"
     private static final byte[] LINE_SEPARATOR = System
             .getProperty("line.separator").getBytes(UTF_8)
+    static final String HEADER = 'ID,"Vendor of the SW Component","Name of the SW Component","Version of the SW Component","Source of the SW Component","Is the SW Component modified(Y/N)","Author(s) of the Modification(s)","Copyright Information","Name & Version of the SW-License","Link to SW Component License","Text to be displayed","Additional License Conditions","Integration for the SW Component","Superordinate SW Component"'
     private static final int GRANULAR_BASE_VERSION = 14
     private static final String GOOGLE_PLAY_SERVICES_GROUP =
         "com.google.android.gms"
-    private static final String LICENSE_ARTIFACT_SUFFIX = "-license"
+    // private static final String LICENSE_ARTIFACT_SUFFIX = "-license"
     private static final String FIREBASE_GROUP = "com.google.firebase"
     private static final String FAIL_READING_LICENSES_ERROR =
         "Failed to read license text."
@@ -57,6 +57,11 @@ class LicensesTask extends DefaultTask {
 
     @InputFile
     public File dependenciesJson
+
+    @InputFile
+    public Property<File> missingLicenses
+
+    public Map<ArtifactID, GPathResult> missingLicenseInfo = new HashMap<>()
 
     @OutputDirectory
     public File outputDir
@@ -73,11 +78,12 @@ class LicensesTask extends DefaultTask {
         for (entry in allDependencies) {
             String group = entry.group
             String name = entry.name
-            String fileLocation = entry.fileLocation
+            // String fileLocation = entry.fileLocation
             String version = entry.version
-            File artifactLocation = new File(fileLocation)
+            // File artifactLocation = new File(fileLocation)
 
             if (isGoogleServices(group)) {
+                /*
                 // Add license info for google-play-services itself
                 if (!name.endsWith(LICENSE_ARTIFACT_SUFFIX)) {
                     addLicensesFromPom(group, name, version)
@@ -92,6 +98,8 @@ class LicensesTask extends DefaultTask {
                 } else if (name.endsWith(LICENSE_ARTIFACT_SUFFIX)) {
                     addGooglePlayServiceLicenses(artifactLocation)
                 }
+                 */
+                throw new IllegalArgumentException("Google services dependencies not supported")
             } else {
                 addLicensesFromPom(group, name, version)
             }
@@ -110,8 +118,14 @@ class LicensesTask extends DefaultTask {
             logger.error("License file is undefined")
         }
         licenses.newWriter().withWriter {w ->
-            w << ''
+            w << HEADER
         }
+        licenses.append(LINE_SEPARATOR)
+
+        if (missingLicenses != null && missingLicenses.isPresent()) {
+            loadMissingLicenses(missingLicenses.get());
+        }
+
     }
 
     protected static boolean isGoogleServices(String group) {
@@ -125,6 +139,7 @@ class LicensesTask extends DefaultTask {
                 && Integer.valueOf(versions[0]) >= GRANULAR_BASE_VERSION)
     }
 
+    /*
     protected void addGooglePlayServiceLicenses(File artifactFile) {
         ZipFile licensesZip = new ZipFile(artifactFile)
         JsonSlurper jsonSlurper = new JsonSlurper()
@@ -157,6 +172,8 @@ class LicensesTask extends DefaultTask {
             }
         }
     }
+
+     */
 
     protected static byte[] getBytesFromInputStream(
         InputStream stream,
@@ -200,21 +217,60 @@ class LicensesTask extends DefaultTask {
         }
 
         def rootNode = new XmlSlurper().parse(pomFile)
+
+        String product = neStr(rootNode.getProperty("name"));
+        if (product == null) {
+            product = "${group}:${name}"
+        } else {
+            if (product != "${group}:${name}") {
+                product = "${product} (${group}:${name})"
+            }
+        }
+
+        def url = neStr(rootNode.scm.url)
+
+        if (url == null) {
+            url = neStr(rootNode.url);
+        }
+
         if (rootNode.licenses.size() == 0) {
+            if (!LicenseResolver.manualLicense(this, rootNode, group, name, version, url, product)) {
+                throw new IllegalArgumentException("No license information in "+pomFile)
+            }
             return
         }
 
-        String licenseKey = "${group}:${name}"
+        def manualUrl = LicenseResolver.manualURL(this, group, name);
+
+        if (manualUrl != null) {
+            url = manualUrl
+        }
+
+        dumpLicenses(group, name, url, rootNode, product, version)
+
+    }
+
+    void dumpLicenses(String group, String artifact, String url, GPathResult rootNode, String product, String version) {
+
+        if (url == null) {
+            url = neStr(rootNode.url)
+        }
+
+        if (url == null) {
+            throw new IllegalArgumentException("Can not find URL for $group:$artifact POM")
+        }
+
         if (rootNode.licenses.license.size() > 1) {
             rootNode.licenses.license.each { node ->
                 String nodeName = node.name
                 String nodeUrl = node.url
-                appendLicense("${licenseKey} ${nodeName}", "${licenseKey}", version, nodeUrl.getBytes(UTF_8))
+                appendLicense("${product} ${nodeName}", "${product}", version, url, nodeUrl)
             }
         } else {
             String nodeUrl = rootNode.licenses.license.url
-            appendLicense(licenseKey, licenseKey, version, nodeUrl.getBytes(UTF_8))
+            appendLicense(product, product, version, url, nodeUrl)
         }
+
     }
 
     private File resolvePomFileArtifact(String group, String name, String version) {
@@ -243,16 +299,37 @@ class LicensesTask extends DefaultTask {
         return ((ResolvedArtifactResult) artifacts[0]).getFile()
     }
 
-    protected void appendLicense(String id, String product, String version, byte[] content) {
+    protected void appendLicense(String id, String product, String version, String url, String licenseUrl) {
 
-        if (addedLicenses.contains(id)) { return }
-        addedLicenses.add(id)
+        if (addedLicenses.contains(id+licenseUrl)) { return }
+        addedLicenses.add(id+licenseUrl)
 
+        // ID, vendor
+        licenses.append(',,')
+        // name of the SW component
         licenses.append(formatCsvString(product))
         licenses.append(',')
+        // version of the SW Component
         licenses.append(formatCsvString(version))
         licenses.append(',')
-        licenses.append(formatCsvString(new String(content)))
+        // source of the SW Component
+        licenses.append(formatCsvString(url))
+        licenses.append(',')
+        // is the SW Component modified
+        // modification authors
+        // copyright information
+        licenses.append('N,,,')
+        // name and version of the license
+        licenses.append(formatCsvString(LicenseResolver.resolveLicenseNameVersion(licenseUrl)))
+        licenses.append(',')
+        // license URL
+        licenses.append(formatCsvString(licenseUrl))
+        licenses.append(',')
+        // text to be displayed
+        // additional license conditions
+        // integration of the sw components
+        // superordinate
+        licenses.append(',,,')
         licenses.append(LINE_SEPARATOR)
 
     }
@@ -301,5 +378,18 @@ class LicensesTask extends DefaultTask {
 
     }
 
+    void loadMissingLicenses(File file) {
+        def root = new XmlSlurper().parse(file)
+        root.library.each { library ->
+            missingLicenseInfo.put(new ArtifactID(neStr(library.groupId), neStr(library.artifactId)), library)
+        }
+    }
+
+    static neStr(Object o) {
+        if (o == null) { return null }
+        def s = o.toString().trim()
+        if ("" == s) { return null }
+        return s;
+    }
 
 }

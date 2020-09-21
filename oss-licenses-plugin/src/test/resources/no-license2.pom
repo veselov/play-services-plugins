@@ -1,0 +1,10 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>guava2</groupId>
+    <artifactId>guava2</artifactId>
+    <version>1</version>
+    <name>no license</name>
+    <description>groupA deps1</description>
+
+</project>

@@ -1,11 +1,12 @@
 <project>
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>groupA</groupId>
-  <artifactId>groupA-deps1</artifactId>
+  <groupId>guava</groupId>
+  <artifactId>guava</artifactId>
   <version>1</version>
   <name>groupA deps1</name>
   <description>groupA deps1</description>
+  <url>x</url>
 
   <licenses>
     <license>

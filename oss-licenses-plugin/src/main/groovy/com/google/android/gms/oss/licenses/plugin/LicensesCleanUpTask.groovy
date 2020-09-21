@@ -35,9 +35,6 @@ class LicensesCleanUpTask extends DefaultTask {
     public File licensesFile
 
     @Input
-    public File metadataFile
-
-    @Input
     public File licensesDir
 
     @TaskAction
@@ -52,10 +49,6 @@ class LicensesCleanUpTask extends DefaultTask {
 
         if (licensesFile.exists()) {
             licensesFile.delete()
-        }
-
-        if (metadataFile.exists()) {
-            metadataFile.delete()
         }
 
         if (licensesDir.isDirectory() && licensesDir.list().length == 0) {

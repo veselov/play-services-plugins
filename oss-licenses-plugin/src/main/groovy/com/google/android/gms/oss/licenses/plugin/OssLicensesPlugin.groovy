@@ -22,6 +22,9 @@ import org.gradle.api.Project
 
 class OssLicensesPlugin implements Plugin<Project> {
     void apply(Project project) {
+
+        OssPluginExtension extension = project.getExtensions().create("ossPlugin", OssPluginExtension.class, project)
+
         def getDependencies = project.tasks.create("getDependencies",
                 DependencyTask)
         def dependencyOutput = new File(project.buildDir,
@@ -35,6 +38,8 @@ class OssLicensesPlugin implements Plugin<Project> {
         def outputDir = new File(resourceOutput, "/raw")
         def licensesFile = new File(outputDir, "third_party_licenses.csv")
         def licenseTask = project.tasks.create("generateLicenses", LicensesTask)
+
+        licenseTask.missingLicenses = extension.missingLicenses
 
         licenseTask.dependenciesJson = generatedJson
         licenseTask.outputDir = outputDir

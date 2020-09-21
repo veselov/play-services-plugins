@@ -46,7 +46,6 @@ public class LicensesCleanUpTaskTest {
     licensesDir.mkdir();
 
     File licensesFile = new File(licensesDir, "third_party_licenses");
-    File metadataFile = new File(licensesDir, "third_party_license_metadata");
 
     Project project = ProjectBuilder.builder().withProjectDir(testDir).build();
     LicensesCleanUpTask task =
@@ -55,13 +54,11 @@ public class LicensesCleanUpTaskTest {
     task.dependencyFile = dependencyFile;
     task.licensesDir = licensesDir;
     task.licensesFile = licensesFile;
-    task.metadataFile = metadataFile;
 
     task.action();
     assertFalse(task.dependencyFile.exists());
     assertFalse(task.dependencyDir.exists());
     assertFalse(task.licensesFile.exists());
-    assertFalse(task.metadataFile.exists());
     assertFalse(task.licensesDir.exists());
   }
 }

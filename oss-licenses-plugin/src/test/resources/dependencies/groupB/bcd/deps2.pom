@@ -6,6 +6,7 @@
   <version>1</version>
   <name>groupA deps1</name>
   <description>groupA deps1</description>
+  <url>x</url>
 
   <licenses>
     <license>
