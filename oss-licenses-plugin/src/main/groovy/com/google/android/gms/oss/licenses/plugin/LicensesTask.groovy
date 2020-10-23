@@ -233,11 +233,12 @@ class LicensesTask extends DefaultTask {
             url = neStr(rootNode.url);
         }
 
-        if (rootNode.licenses.size() == 0) {
-            if (!LicenseResolver.manualLicense(this, rootNode, group, name, version, url, product)) {
-                throw new IllegalArgumentException("No license information in "+pomFile)
-            }
+        if (LicenseResolver.manualLicense(this, rootNode, group, name, version, url, product)) {
             return
+        }
+
+        if (rootNode.licenses.size() == 0) {
+            throw new IllegalArgumentException("No license information in "+pomFile)
         }
 
         def manualUrl = LicenseResolver.manualURL(this, group, name);

@@ -15,6 +15,8 @@ class LicenseResolver {
             case "https://opensource.org/licenses/mit-license.php":
             case "http://www.opensource.org/licenses/mit-license.php":
                 return "MIT License"
+            case "https://en.wikipedia.org/wiki/WTFPL":
+                return "Public Domain"
         }
 
         throw new IllegalArgumentException("Unsupported license URL "+url)
@@ -34,7 +36,14 @@ class LicenseResolver {
         if (missingInfo.skip.size() > 0) { return true }
 
         if (missingInfo.licenses.size() == 0) {
-            throw new IllegalArgumentException("No license information for ${group}:${artifact}")
+            // throw new IllegalArgumentException("No license information for ${group}:${artifact}")
+            return false
+        }
+
+        def manualUrl = manualURL(task, group, artifact);
+
+        if (manualUrl != null) {
+            url = manualUrl
         }
 
         task.dumpLicenses(group, artifact, url, missingInfo, product, version)

@@ -22,7 +22,7 @@ dependencies {
 }
 
 group = 'com.google.android.gms'
-version = '0.10.2-xl4.1'
+version = '0.10.2-xl4.2'
 
 repositories {
     google()
