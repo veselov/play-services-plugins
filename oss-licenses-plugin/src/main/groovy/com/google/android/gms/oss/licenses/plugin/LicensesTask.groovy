@@ -20,6 +20,8 @@ import groovy.json.JsonSlurper
 import groovy.util.slurpersupport.GPathResult
 import org.gradle.api.DefaultTask
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.dsl.RepositoryHandler
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.artifacts.result.ResolvedArtifactResult
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.provider.Property
@@ -55,6 +57,10 @@ class LicensesTask extends DefaultTask {
     protected Set<String> googleServiceLicenses = []
     protected Set<String> addedLicenses = []
 
+    public RepositoryHandler repositories;
+
+    protected Set<URI> repositoryURLs;
+
     @InputFile
     public File dependenciesJson
 
@@ -73,6 +79,8 @@ class LicensesTask extends DefaultTask {
     void action() {
         initOutputDir()
         initLicenseFile()
+
+        distillRepositoryURLs()
 
         def allDependencies = new JsonSlurper().parse(dependenciesJson)
         for (entry in allDependencies) {
@@ -111,6 +119,57 @@ class LicensesTask extends DefaultTask {
         if (!outputDir.exists()) {
             outputDir.mkdirs()
         }
+    }
+
+    protected void distillRepositoryURLs() {
+
+        repositoryURLs = new HashSet<>()
+
+        for (int i = 0; i<repositories.size(); i++) {
+            MavenArtifactRepository repo = (MavenArtifactRepository)repositories.get(i)
+            repositoryURLs.add(repo.getUrl())
+        }
+
+        for (URI u : repositoryURLs) {
+            logger.debug("repo URI:"+u)
+        }
+
+    }
+
+    protected String findSourcesJar(String group, String name, String version) {
+
+        for (URI repo : repositoryURLs) {
+
+            StringBuilder relPath = new StringBuilder();
+
+            if (!repo.getPath().endsWith("/")) {
+                relPath.append("/")
+            }
+
+            StringTokenizer groupChop = new StringTokenizer(group, ".")
+            while (groupChop.hasMoreTokens()) {
+                relPath.append(groupChop.nextElement());
+                relPath.append('/');
+            }
+            relPath.append(name).append('/').append(version).append('/')
+                .append(name).append('-').append(version).append("-sources.jar")
+
+            URI srcURL = repo.resolve(relPath.toString())
+
+            HttpURLConnection uc = (HttpURLConnection)srcURL.toURL().openConnection()
+            uc.setRequestMethod("HEAD")
+            if (uc.getResponseCode() == 200) {
+                logger.debug("Found ${srcURL}")
+                return srcURL.toString()
+            }
+
+            logger.debug("Not found ${uc.getResponseCode()}:${srcURL}")
+
+        }
+
+        logger.error("Source JAR not found for ${group}:${name}:${version}")
+        return null;
+
     }
 
     protected void initLicenseFile() {
@@ -227,10 +286,14 @@ class LicensesTask extends DefaultTask {
             }
         }
 
-        def url = neStr(rootNode.scm.url)
+        def url = findSourcesJar(group, name, version)
 
         if (url == null) {
-            url = neStr(rootNode.url);
+            url = neStr(rootNode.scm.url)
+        }
+
+        if (url == null) {
+            url = neStr(rootNode.url)
         }
 
         if (LicenseResolver.manualLicense(this, rootNode, group, name, version, url, product)) {
@@ -241,7 +304,7 @@ class LicensesTask extends DefaultTask {
             throw new IllegalArgumentException("No license information in "+pomFile)
         }
 
-        def manualUrl = LicenseResolver.manualURL(this, group, name);
+        def manualUrl = LicenseResolver.manualURL(this, group, name)
 
         if (manualUrl != null) {
             url = manualUrl
@@ -390,7 +453,7 @@ class LicensesTask extends DefaultTask {
         if (o == null) { return null }
         def s = o.toString().trim()
         if ("" == s) { return null }
-        return s;
+        return s
     }
 
 }

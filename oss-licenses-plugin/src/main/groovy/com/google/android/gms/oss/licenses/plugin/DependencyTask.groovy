@@ -97,7 +97,7 @@ class DependencyTask extends DefaultTask {
                 }
             }
             return artifactSet.isEmpty()
-        } catch (JsonException exception) {
+        } catch (JsonException ignored) {
             return false
         }
     }
@@ -116,6 +116,7 @@ class DependencyTask extends DefaultTask {
 
     protected addArtifacts(Set<ResolvedArtifact> artifacts) {
         for (ResolvedArtifact artifact : artifacts) {
+            //logger.error("artefact:"+artifact.dump());
             String group = artifact.moduleVersion.id.group
             String artifact_key = artifact.file.getAbsolutePath()
 

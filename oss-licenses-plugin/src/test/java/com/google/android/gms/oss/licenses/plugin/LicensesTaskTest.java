@@ -67,6 +67,7 @@ public class LicensesTaskTest {
     project = ProjectBuilder.builder().withProjectDir(new File(BASE_DIR)).build();
     licensesTask = project.getTasks().create("generateLicenses", LicensesTask.class);
 
+    licensesTask.repositories = project.getRepositories();
     licensesTask.outputDir = outputDir;
     licensesTask.licenses = outputLicenses;
   }

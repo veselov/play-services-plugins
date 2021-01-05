@@ -40,6 +40,7 @@ class OssLicensesPlugin implements Plugin<Project> {
         def licenseTask = project.tasks.create("generateLicenses", LicensesTask)
 
         licenseTask.missingLicenses = extension.missingLicenses
+        licenseTask.repositories = project.repositories;
 
         licenseTask.dependenciesJson = generatedJson
         licenseTask.outputDir = outputDir
